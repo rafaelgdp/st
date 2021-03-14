@@ -4,12 +4,12 @@
 from multiprocessing import Pool
 from PIL import Image, ImageDraw, ImageFont
 from random import randint
-import sys, itertools
+import sys, itertools, psutil, datetime
 
 config = {
-    "image_dimension": 10000,
+    "image_dimension": 20000,
     "total_points": 1_000_000,
-    "processor_cores": 2,
+    "processor_cores": 4,
     "bg_color": (0, 0, 0, 255),
     "point_color": (255, 255, 255, 255),
     "parallel_figures": 20
@@ -36,9 +36,13 @@ def f(img) -> Image:
 
 if __name__ == '__main__':
     dimension = config["image_dimension"]
-    estimated_size = ((4 * (dimension ** 2)) // 1024 // 1024) * config["processor_cores"]
-    print("Estimated: {:d}MB".format(estimated_size))
-    if (estimated_size <= 4096):
+    estimated_size_MB = ((4 * (dimension ** 2)) // 1024 // 1024) * config["processor_cores"]
+    print("Estimated: {:d}MB".format(estimated_size_MB))
+    
+    available_memory = psutil.virtual_memory().available
+    available_memory_MB = available_memory // (1024**2)
+    
+    if (estimated_size_MB <= available_memory_MB):
         img = Image.new('RGBA', (dimension, dimension), (0, 0, 0, 0))
         file_size = sys.getsizeof(img.tobytes()) / 1024 / 1024
         print("Actual size: %dMB" % (file_size))
@@ -51,16 +55,22 @@ if __name__ == '__main__':
             img.paste(image, mask=image)
         draw = ImageDraw.Draw(img)
         font_size = img.width // 40
-        font = ImageFont.truetype("/usr/share/fonts/TTF/DroidSansMono.ttf", size=font_size)
+        font = ImageFont.truetype("./font/Courier Prime.ttf", size=font_size)
         draw.text((20, 20), "Feito por Rafael Pontes. :)", fill=(255, 255, 255, 255), font=font)
-        img.save("st.png")
-        
+        date_str = datetime.datetime.now().strftime("%Y_%m_%d_%Hh%Mmin%S")
+        filename = f"st_{config['image_dimension']}x{config['image_dimension']}_at_{date_str}.png"
+        img.save(filename)
+        print("Created file %s, which has transparent background." % filename)
+        print("Next is the creation of a black-coloured background image...")
         for row in range(img.width):
             for col in range(img.height):
                 point = (row, col)
                 if img.getpixel(point)[3] == 0:
                     img.putpixel(point, config["bg_color"])
         draw.text((20, 20), "Feito por Rafael Pontes. :)", fill=(255, 255, 255, 255), font=font)
-        img.save("st_blackbg.png")
+        filename = f"st_{config['image_dimension']}x{config['image_dimension']}_at_{date_str}_black.png"
+        print("About to save image named %s." % filename)
+        img.save(filename)
+        print("Done!")
     else:
-        print("Dangerous amount of memory allocation!")
+        print("Dangerous amount of memory allocation! Estimated %d MB of concurrent RAM usage but only %d MB available." % (estimated_size_MB, available_memory_MB))
